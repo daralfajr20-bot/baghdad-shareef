@@ -119,6 +119,7 @@
   </div>
 
   <div class="note">Hold your phone flat, turn slowly in a full circle. When the white arrow lines up with an icon, you're facing that sacred direction. Works best outdoors with GPS.</div>
+  <div class="note" id="debugHeading" style="opacity:.8;">Device heading: &#8212;</div>
 </div>
 
 <script>
@@ -241,14 +242,29 @@
     }
   }
 
+  let warnedRelative = false;
+
   function handleOrientation(event){
     let heading;
-    if (typeof event.webkitCompassHeading === 'number') heading = event.webkitCompassHeading;
-    else if (event.alpha !== null) heading = 360 - event.alpha;
-    else return;
+    if (typeof event.webkitCompassHeading === 'number') {
+      // iOS Safari: already a true compass heading
+      heading = event.webkitCompassHeading;
+    } else if (event.absolute === true && event.alpha !== null) {
+      // Android absolute orientation: reliably tied to true/magnetic north
+      heading = (360 - event.alpha) % 360;
+    } else {
+      // Relative-only orientation: NOT tied to north, would silently give wrong directions
+      if (!warnedRelative) {
+        warnedRelative = true;
+        statusEl.innerHTML = 'Your browser only provided a relative sensor reading (not tied to true north), so directions cannot be trusted yet. Try Chrome on Android, reload the page, and allow motion access again.';
+      }
+      return;
+    }
     compassHeading = heading;
     orientationActive = true;
     updateAlignment();
+    const dbg = document.getElementById('debugHeading');
+    if (dbg) dbg.textContent = 'Device heading: ' + Math.round(heading) + '\u00B0 (compare with your phone\'s built-in compass to verify)';
   }
 
   async function enableCompass(){
