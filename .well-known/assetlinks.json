@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.daralfajr20_bot.twa",
+    "sha256_cert_fingerprints": ["DF:3C:51:1F:1E:33:1B:E7:5A:39:06:94:81:1C:25:D4:0C:AE:19:BB:4A:15:DC:8E:E2:F4:D6:E7:07:3D:19:0F"]
+  }
+}]
