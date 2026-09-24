@@ -51,13 +51,15 @@
   .ticks div.major{ height:15px; width:3px; background:var(--gold-soft); }
   .cardinal{ position:absolute; inset:0; font-size:.75rem; font-weight:700; color:var(--gold-soft); }
   .cardinal span{ position:absolute; transform:translate(-50%,-50%); }
+  .cardinal span i{ display:inline-block; font-style:normal; transition:transform .12s linear; }
+  #dial{ transition:transform .12s linear; }
   .n{ top:8%; left:50%; } .e{ top:50%; left:92%; } .s{ top:92%; left:50%; } .w{ top:50%; left:8%; }
 
   /* fixed destination markers, positioned by JS at their true bearing angle */
   .marker{
     position:absolute; width:40px; height:40px; transform:translate(-50%,-50%);
     display:flex; flex-direction:column; align-items:center; gap:2px; z-index:3;
-    transition:filter .2s ease, transform .2s ease;
+    transition:filter .2s ease, transform .2s ease, left .12s linear, top .12s linear;
   }
   .marker img{ width:34px; height:34px; border-radius:10px; border:2px solid var(--gold); object-fit:cover; box-shadow:0 2px 6px rgba(0,0,0,.5); }
   .marker .mlabel{ display:none; }
@@ -104,8 +106,12 @@
 
   <div class="compass-stage">
     <div class="ring"></div>
-    <div class="ticks" id="ticks"></div>
-    <div class="cardinal"><span class="n">N</span><span class="e">E</span><span class="s">S</span><span class="w">W</span></div>
+    <div id="dial" style="position:absolute; inset:0;">
+      <div class="ticks" id="ticks"></div>
+      <div class="cardinal">
+        <span class="n"><i>N</i></span><span class="e"><i>E</i></span><span class="s"><i>S</i></span><span class="w"><i>W</i></span>
+      </div>
+    </div>
     <div id="markers"></div>
     <div class="pointer-wrap" id="pointerWrap"><div class="pointer"></div></div>
     <div class="hub"></div>
@@ -136,6 +142,7 @@
   const ticks = document.getElementById('ticks');
   const markersEl = document.getElementById('markers');
   const pointerWrap = document.getElementById('pointerWrap');
+  const dialEl = document.getElementById('dial');
   const legendEl = document.getElementById('legend');
 
   for(let i=0;i<72;i++){
@@ -187,9 +194,11 @@
     // place each destination's icon at its fixed bearing angle around the ring (0=N=top, clockwise)
     const radiusPct = 40; // percent of stage half-width, keeps icons on the ring
     DESTINATIONS.forEach(dest => {
-      const angle = dest.bearing;
-      const x = 50 + radiusPct * Math.sin(toRad(angle));
-      const y = 50 - radiusPct * Math.cos(toRad(angle));
+      // relativeAngle: where this destination sits relative to the phone's CURRENT facing
+      // direction, so that "forward" is always the 12 o'clock position.
+      const relativeAngle = (dest.bearing - compassHeading + 360) % 360;
+      const x = 50 + radiusPct * Math.sin(toRad(relativeAngle));
+      const y = 50 - radiusPct * Math.cos(toRad(relativeAngle));
       const el = document.getElementById('marker-' + dest.id);
       el.style.left = x + '%';
       el.style.top = y + '%';
@@ -206,13 +215,20 @@
       distEl.innerHTML = distEl.textContent;
     });
     bearingsReady = true;
-    placeMarkers();
     updateAlignment();
   }
 
   function updateAlignment(){
     if(!bearingsReady) return;
-    pointerWrap.style.transform = `rotate(${compassHeading}deg)`;
+    // The pointer always represents "forward" (12 o'clock) and stays fixed;
+    // destinations move around it based on relative bearing. The dial ring
+    // (N/E/S/W + ticks) rotates opposite the heading so it stays geographically
+    // correct, with the cardinal letters counter-rotated to stay upright.
+    dialEl.style.transform = `rotate(${-compassHeading}deg)`;
+    document.querySelectorAll('.cardinal span i').forEach(i => {
+      i.style.transform = `rotate(${compassHeading}deg)`;
+    });
+    placeMarkers();
 
     let matched = null;
     let nearest = null; let nearestDiff = 999;
