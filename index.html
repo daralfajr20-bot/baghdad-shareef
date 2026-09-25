@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sacred Directions</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b3d2e">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-baghdad-192.png">
+<link rel="apple-touch-icon" href="icon-baghdad-192.png">
+<style>
+  :root{
+    --green-deep:#0b3d2e; --green-mid:#12563f; --green-glow:#1c7a55;
+    --gold:#d4af37; --gold-soft:#e9cf7a; --cream:#f3ead7; --ink:#0a2119;
+    font-family:"Amiri","Georgia",serif;
+  }
+  :root:not([data-theme="light"]){ --bg:#08201a; --panel:#0e2f24; --text:var(--cream); }
+  :root[data-theme="dark"]{ --bg:#08201a; --panel:#0e2f24; --text:var(--cream); }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --bg:#08201a; --panel:#0e2f24; --text:var(--cream); } }
+  :root[data-theme="light"]{ --bg:#08201a; --panel:#0e2f24; --text:var(--cream); }
+
+  *{box-sizing:border-box;}
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--text); }
+  html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+  body{
+    min-height:100%; display:flex; flex-direction:column; align-items:center;
+    padding:calc(18px + env(safe-area-inset-top,0px)) 18px calc(22px + env(safe-area-inset-bottom,0px));
+    background: radial-gradient(circle at 50% -10%, var(--green-mid) 0%, transparent 55%), linear-gradient(180deg, var(--bg) 0%, #061914 100%);
+    overflow-x:hidden;
+  }
+  .lattice{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.10;
+    background-image: repeating-linear-gradient(45deg, var(--gold) 0 1px, transparent 1px 26px), repeating-linear-gradient(-45deg, var(--gold) 0 1px, transparent 1px 26px); }
+
+  .wrap{ position:relative; z-index:1; width:100%; max-width:420px; display:flex; flex-direction:column; align-items:center; }
+
+  header{ text-align:center; margin-bottom:2px; }
+  h1{ font-size:1.2rem; margin:0; color:var(--gold-soft); letter-spacing:.02em; font-weight:700; }
+  .sub{ font-size:.76rem; color:rgba(243,234,215,.65); margin-top:3px; font-family:Georgia,serif; font-style:italic; }
+
+  .status{ width:100%; background:rgba(212,175,55,.08); border:1px solid rgba(212,175,55,.35);
+    border-radius:14px; padding:12px 15px; margin:14px 0 8px; font-size:.88rem; color:var(--cream); line-height:1.4; text-align:center; min-height:1.4em; }
+  .status b{ color:var(--gold-soft); }
+  .status.aligned{ background:rgba(212,175,55,.22); border-color:var(--gold); }
+
+  .compass-stage{ position:relative; width:min(80vw,300px); height:min(80vw,300px); margin:16px 0 14px; display:flex; align-items:center; justify-content:center; }
+  .ring{ position:absolute; inset:0; border-radius:50%;
+    background:radial-gradient(circle at 50% 40%, var(--green-glow) 0%, var(--green-mid) 55%, var(--green-deep) 100%);
+    box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 0 0 10px rgba(212,175,55,.08), inset 0 4px 24px rgba(0,0,0,.45); }
+  .ticks{ position:absolute; inset:0; transition:transform .12s linear; }
+  .ticks div{ position:absolute; left:50%; top:6px; width:2px; height:11px; background:rgba(233,207,122,.55); transform-origin:1px 144px; }
+  .ticks div.major{ height:15px; width:3px; background:var(--gold-soft); }
+  .cardinal{ position:absolute; inset:0; font-size:.75rem; font-weight:700; color:var(--gold-soft); transition:transform .12s linear; }
+  .cardinal span{ position:absolute; transform:translate(-50%,-50%); }
+  .cardinal span i{ display:inline-block; font-style:normal; }
+  .n{ top:8%; left:50%; } .e{ top:50%; left:92%; } .s{ top:92%; left:50%; } .w{ top:50%; left:8%; }
+
+  /* small transparent markers, no boxed backdrop, positioned by relative heading */
+  .marker{
+    position:absolute; width:34px; height:34px; transform:translate(-50%,-50%);
+    z-index:3; transition:left .12s linear, top .12s linear, filter .2s ease;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));
+  }
+  .marker img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .marker.active{ filter:drop-shadow(0 0 8px var(--gold-soft)) drop-shadow(0 0 3px #fff); }
+
+  .pointer-wrap{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .pointer{ width:5px; height:44%; background:linear-gradient(180deg, var(--cream), rgba(243,234,215,.2)); border-radius:4px; position:relative; }
+  .pointer::before{ content:''; position:absolute; top:-8px; left:50%; transform:translateX(-50%); width:0; height:0;
+    border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:14px solid var(--cream); }
+
+  .hub{ position:absolute; width:11%; height:11%; border-radius:50%; z-index:4;
+    background:radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold) 60%, #8a6b1e 100%); box-shadow:0 0 8px rgba(212,175,55,.7); }
+
+  .legend{ display:flex; gap:10px; width:100%; margin-top:2px; }
+  .legend .item{ flex:1; background:var(--panel); border:1px solid rgba(212,175,55,.3); border-radius:14px; padding:9px 6px; text-align:center; transition:border-color .2s ease, background .2s ease; }
+  .legend .item.active{ border-color:var(--gold); background:rgba(212,175,55,.15); }
+  .legend .item img{ width:28px; height:28px; border-radius:8px; object-fit:cover; margin-bottom:4px; }
+  .legend .item .name{ font-size:.66rem; font-weight:700; color:var(--cream); line-height:1.15; }
+  .legend .item .dist{ font-size:.62rem; color:var(--gold-soft); margin-top:2px; }
+
+  .btnrow{ display:flex; flex-direction:column; gap:9px; width:100%; margin-top:16px; }
+  button{ font-family:inherit; font-size:.92rem; font-weight:700; color:var(--ink);
+    background:linear-gradient(180deg, var(--gold-soft), var(--gold)); border:none; border-radius:12px; padding:12px 16px; cursor:pointer;
+    box-shadow:0 3px 0 #8a6b1e, 0 6px 14px rgba(0,0,0,.35); }
+  button:active{ transform:translateY(2px); box-shadow:0 1px 0 #8a6b1e; }
+  button.secondary{ background:transparent; color:var(--gold-soft); border:1px solid rgba(212,175,55,.5); box-shadow:none; }
+  button:focus-visible{ outline:3px solid var(--gold-soft); outline-offset:2px; }
+
+  .note{ font-size:.7rem; color:rgba(243,234,215,.5); text-align:center; margin-top:14px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="lattice"></div>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const DESTINATIONS_BASE = [
+  { id:'baghdad', label:'Baghdad Shareef', icon:'marker-baghdad.png', legendIcon:'icon-baghdad-192.png', lat:33.33639, lon:44.40806 },
+  { id:'kaaba',   label:'Al-Kaabah, Makkah', icon:'marker-kaaba.png', legendIcon:'icon-kaaba-192.png', lat:21.4225,  lon:39.8262 },
+  { id:'madina',  label:'Madina Shareef', icon:'marker-madina.png', legendIcon:'icon-madina-192.png', lat:24.4672,  lon:39.6112 }
+];
+const ALIGN_THRESHOLD = 9;   // degrees - unchanged
+const MIN_VISUAL_GAP = 26;   // degrees - purely cosmetic spacing so nearby icons don't overlap
+
+function toRad(d){ return d*Math.PI/180; }
+function toDeg(r){ return r*180/Math.PI; }
+function angDiff(a,b){ let d = Math.abs(a-b) % 360; return d > 180 ? 360-d : d; }
+
+function computeBearingDistance(lat1, lon1, lat2, lon2){
+  const phi1 = toRad(lat1), phi2 = toRad(lat2);
+  const dLambda = toRad(lon2-lon1);
+  const y = Math.sin(dLambda)*Math.cos(phi2);
+  const x = Math.cos(phi1)*Math.sin(phi2) - Math.sin(phi1)*Math.cos(phi2)*Math.cos(dLambda);
+  let theta = toDeg(Math.atan2(y,x));
+  theta = (theta + 360) % 360;
+  const R = 6371;
+  const dPhi = toRad(lat2-lat1);
+  const a = Math.sin(dPhi/2)**2 + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dLambda/2)**2;
+  const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return { bearing: theta, distance: R*c };
+}
+
+// Purely visual: nudges apart marker angles that sit too close together (e.g. Kaaba & Madina
+// are geographically near each other, so their bearings from far away are often within ~15-20
+// degrees). Does NOT touch the real bearing/distance data used for alignment detection.
+function declutterAngles(items, minGap){
+  const sorted = [...items].sort((a,b)=>a.angle-b.angle);
+  for(let i=1;i<sorted.length;i++){
+    const prev = sorted[i-1];
+    const curr = sorted[i];
+    let diff = curr.angle - prev.angle;
+    if(diff < minGap) curr.angle = prev.angle + minGap;
+  }
+  // circular wrap check (last vs first)
+  if(sorted.length > 1){
+    const first = sorted[0];
+    const last = sorted[sorted.length-1];
+    let wrapDiff = (first.angle + 360) - last.angle;
+    if(wrapDiff < minGap){
+      const shift = (minGap - wrapDiff) / 2;
+      first.angle -= shift;
+      last.angle += shift;
+    }
+  }
+  return sorted;
+}
+
+function Compass(){
+  const [destinations, setDestinations] = useState(DESTINATIONS_BASE.map(d => ({...d, bearing:null, distance:null})));
+  const [compassHeading, setCompassHeading] = useState(0);
+  const [orientationActive, setOrientationActive] = useState(false);
+  const [bearingsReady, setBearingsReady] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('Tap Start and allow location + compass access, then turn slowly.');
+  const [aligned, setAligned] = useState(false);
+  const [matchedId, setMatchedId] = useState(null);
+  const [calibrateVisible, setCalibrateVisible] = useState(false);
+  const [debugHeading, setDebugHeading] = useState(null);
+  const [startLabel, setStartLabel] = useState('Start — Find Directions');
+  const warnedRelative = useRef(false);
+
+  const ticksRef = useRef(null);
+
+  const handleOrientation = useCallback((event) => {
+    let heading;
+    if (typeof event.webkitCompassHeading === 'number') {
+      heading = event.webkitCompassHeading; // iOS Safari: true compass heading
+    } else if (event.absolute === true && event.alpha !== null) {
+      heading = (360 - event.alpha) % 360; // Android absolute orientation
+    } else {
+      if (!warnedRelative.current) {
+        warnedRelative.current = true;
+        setStatusMsg('Compass permission denied. Cannot detect facing direction.');
+      }
+      return;
+    }
+    setCompassHeading(heading);
+    setOrientationActive(true);
+    setDebugHeading(heading);
+  }, []);
+
+  const enableCompass = useCallback(async () => {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') {
+          setStatusMsg('Compass permission denied. Cannot detect facing direction.');
+          return;
+        }
+      } catch (e) {
+        setStatusMsg('Could not access the compass sensor on this device.');
+        return;
+      }
+    }
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    setCalibrateVisible(true);
+  }, [handleOrientation]);
+
+  const locate = useCallback(() => {
+    if (!navigator.geolocation) { setStatusMsg('This browser has no location support.'); return; }
+    setStatusMsg('Locating you...');
+    navigator.geolocation.watchPosition(pos => {
+      const { latitude, longitude } = pos.coords;
+      setDestinations(prev => prev.map(dest => {
+        const { bearing, distance } = computeBearingDistance(latitude, longitude, dest.lat, dest.lon);
+        return { ...dest, bearing, distance };
+      }));
+      setBearingsReady(true);
+    }, err => {
+      setStatusMsg('Location error: ' + err.message + '. Please allow location access and try again.');
+    }, { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
+  }, []);
+
+  const handleStart = () => {
+    enableCompass();
+    locate();
+    setStartLabel('Refreshing...');
+    setTimeout(() => setStartLabel('Refresh'), 1200);
+  };
+
+  const handleCalibrate = () => {
+    setStatusMsg('Move your phone in a slow figure-8 a few times, away from metal objects.');
+  };
+
+  // recompute alignment + status whenever heading or bearings change
+  useEffect(() => {
+    if (!bearingsReady) return;
+
+    let matched = null;
+    let nearest = null; let nearestDiff = 999;
+    destinations.forEach(dest => {
+      const diff = angDiff(compassHeading, dest.bearing);
+      if (diff <= ALIGN_THRESHOLD) matched = dest;
+      if (diff < nearestDiff) { nearestDiff = diff; nearest = dest; }
+    });
+
+    setMatchedId(matched ? matched.id : null);
+    setAligned(!!matched);
+
+    if (matched) {
+      setStatusMsg(`Now you're pointing at ${matched.label}`);
+    } else if (orientationActive && nearest) {
+      let rel = ((nearest.bearing - compassHeading + 540) % 360) - 180;
+      const dir = rel < 0 ? 'left' : 'right';
+      setStatusMsg(`Turn ${dir} about ${Math.round(Math.abs(rel))}° to face ${nearest.label}`);
+    } else if (!orientationActive) {
+      setStatusMsg('Compass not active — showing directions as if facing North. Grant motion access for live pointing.');
+    }
+  }, [compassHeading, bearingsReady, destinations, orientationActive]);
+
+  // build tick marks once
+  useEffect(() => {
+    if (!ticksRef.current) return;
+    ticksRef.current.innerHTML = '';
+    for (let i = 0; i < 72; i++) {
+      const d = document.createElement('div');
+      const deg = i * 5;
+      d.style.transform = `rotate(${deg}deg)`;
+      if (deg % 30 === 0) d.className = 'major';
+      ticksRef.current.appendChild(d);
+    }
+  }, []);
+
+  const dialTransform = `rotate(${-compassHeading}deg)`;
+  const letterTransform = `rotate(${compassHeading}deg)`;
+
+  // compute raw relative angles, then declutter purely for display
+  const rawAngles = destinations.map(d => ({
+    id: d.id,
+    angle: bearingsReady ? (d.bearing - compassHeading + 360) % 360 : 0
+  }));
+  const declutteredList = bearingsReady ? declutterAngles(rawAngles, MIN_VISUAL_GAP) : rawAngles;
+  const displayAngleById = {};
+  declutteredList.forEach(item => { displayAngleById[item.id] = item.angle; });
+
+  const radiusPct = 40;
+
+  return (
+    <div className="wrap">
+      <header>
+        <h1>Sacred Directions</h1>
+        <div className="sub">Baghdad Shareef · Kaabah · Madina Shareef</div>
+      </header>
+
+      <div className={"status" + (aligned ? " aligned" : "")} dangerouslySetInnerHTML={{__html: statusMsg.replace(
+        new RegExp('(' + destinations.map(d=>d.label).join('|') + ')'), '<b>$1</b>'
+      )}} />
+
+      <div className="compass-stage">
+        <div className="ring"></div>
+        <div style={{position:'absolute', inset:0, transform:dialTransform}}>
+          <div className="ticks" ref={ticksRef}></div>
+          <div className="cardinal">
+            <span className="n"><i style={{display:'inline-block', transform:letterTransform}}>N</i></span>
+            <span className="e"><i style={{display:'inline-block', transform:letterTransform}}>E</i></span>
+            <span className="s"><i style={{display:'inline-block', transform:letterTransform}}>S</i></span>
+            <span className="w"><i style={{display:'inline-block', transform:letterTransform}}>W</i></span>
+          </div>
+        </div>
+
+        {destinations.map(dest => {
+          const angle = displayAngleById[dest.id] || 0;
+          const x = 50 + radiusPct * Math.sin(toRad(angle));
+          const y = 50 - radiusPct * Math.cos(toRad(angle));
+          return (
+            <div
+              key={dest.id}
+              className={"marker" + (matchedId === dest.id ? " active" : "")}
+              style={{ left: x + '%', top: y + '%' }}
+            >
+              <img src={dest.icon} alt={dest.label} />
+            </div>
+          );
+        })}
+
+        <div className="pointer-wrap"><div className="pointer"></div></div>
+        <div className="hub"></div>
+      </div>
+
+      <div className="legend">
+        {destinations.map(dest => (
+          <div key={dest.id} className={"item" + (matchedId === dest.id ? " active" : "")}>
+            <img src={dest.legendIcon} alt={dest.label} />
+            <div className="name">{dest.label}</div>
+            <div className="dist">
+              {dest.distance == null ? '—' :
+                (dest.distance < 10 ? dest.distance.toFixed(2) : Math.round(dest.distance).toLocaleString()) + ' km · ' + Math.round(dest.bearing) + '°'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="btnrow">
+        <button onClick={handleStart}>{startLabel}</button>
+        {calibrateVisible && (
+          <button className="secondary" onClick={handleCalibrate}>Recalibrate compass (move phone in a figure-8)</button>
+        )}
+      </div>
+
+      <div className="note">Hold your phone flat, turn slowly in a full circle. When the white arrow lines up with an icon, you're facing that sacred direction. Works best outdoors with GPS.</div>
+      <div className="note" style={{opacity:.8}}>
+        Device heading: {debugHeading == null ? '—' : Math.round(debugHeading) + '° (compare with your phone\'s built-in compass to verify)'}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Compass />);
+</script>
+</body>
+</html>
