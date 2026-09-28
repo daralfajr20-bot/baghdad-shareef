@@ -56,7 +56,7 @@
 
   /* small transparent markers, no boxed backdrop, positioned by relative heading */
   .marker{
-    position:absolute; width:34px; height:34px; transform:translate(-50%,-50%);
+    position:absolute; width:30px; height:30px; transform:translate(-50%,-50%);
     z-index:3; transition:left .12s linear, top .12s linear, filter .2s ease;
     filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));
   }
@@ -106,7 +106,8 @@ const DESTINATIONS_BASE = [
   { id:'madina',  label:'Madina Shareef', icon:'marker-madina.png', legendIcon:'icon-madina-192.png', lat:24.4672,  lon:39.6112 }
 ];
 const ALIGN_THRESHOLD = 9;   // degrees - unchanged
-const MIN_VISUAL_GAP = 26;   // degrees - purely cosmetic spacing so nearby icons don't overlap
+const CLOSE_GAP = 24;        // degrees - destinations closer than this get placed on different rings
+const RING_RADII = [41, 29, 17]; // % of compass radius: outer, middle, inner
 
 function toRad(d){ return d*Math.PI/180; }
 function toDeg(r){ return r*180/Math.PI; }
@@ -126,29 +127,20 @@ function computeBearingDistance(lat1, lon1, lat2, lon2){
   return { bearing: theta, distance: R*c };
 }
 
-// Purely visual: nudges apart marker angles that sit too close together (e.g. Kaaba & Madina
-// are geographically near each other, so their bearings from far away are often within ~15-20
-// degrees). Does NOT touch the real bearing/distance data used for alignment detection.
-function declutterAngles(items, minGap){
-  const sorted = [...items].sort((a,b)=>a.angle-b.angle);
-  for(let i=1;i<sorted.length;i++){
-    const prev = sorted[i-1];
-    const curr = sorted[i];
-    let diff = curr.angle - prev.angle;
-    if(diff < minGap) curr.angle = prev.angle + minGap;
-  }
-  // circular wrap check (last vs first)
-  if(sorted.length > 1){
-    const first = sorted[0];
-    const last = sorted[sorted.length-1];
-    let wrapDiff = (first.angle + 360) - last.angle;
-    if(wrapDiff < minGap){
-      const shift = (minGap - wrapDiff) / 2;
-      first.angle -= shift;
-      last.angle += shift;
-    }
-  }
-  return sorted;
+// Icons ALWAYS sit at their exact bearing angle. If two destinations are close in bearing
+// (Makkah and Madina are only ~340 km apart), the second one is placed on an inner ring
+// instead, so they never overlap and no direction is ever visually shifted.
+function assignRings(items){
+  const levels = {};
+  const placed = [];
+  [...items].sort((a,b)=>a.bearing-b.bearing).forEach(it => {
+    let level = 0;
+    while(placed.some(p => p.level === level && angDiff(p.bearing, it.bearing) < CLOSE_GAP)) level++;
+    level = Math.min(level, RING_RADII.length-1);
+    placed.push({ bearing: it.bearing, level });
+    levels[it.id] = level;
+  });
+  return levels;
 }
 
 function Compass(){
@@ -270,16 +262,8 @@ function Compass(){
   const dialTransform = `rotate(${-compassHeading}deg)`;
   const letterTransform = `rotate(${compassHeading}deg)`;
 
-  // compute raw relative angles, then declutter purely for display
-  const rawAngles = destinations.map(d => ({
-    id: d.id,
-    angle: bearingsReady ? (d.bearing - compassHeading + 360) % 360 : 0
-  }));
-  const declutteredList = bearingsReady ? declutterAngles(rawAngles, MIN_VISUAL_GAP) : rawAngles;
-  const displayAngleById = {};
-  declutteredList.forEach(item => { displayAngleById[item.id] = item.angle; });
-
-  const radiusPct = 40;
+  // ring level depends only on true bearings, so it is stable while the phone turns
+  const ringById = bearingsReady ? assignRings(destinations) : {};
 
   return (
     <div className="wrap">
@@ -305,7 +289,8 @@ function Compass(){
         </div>
 
         {destinations.map(dest => {
-          const angle = displayAngleById[dest.id] || 0;
+          const angle = bearingsReady ? (dest.bearing - compassHeading + 360) % 360 : 0;
+          const radiusPct = RING_RADII[ringById[dest.id] || 0];
           const x = 50 + radiusPct * Math.sin(toRad(angle));
           const y = 50 - radiusPct * Math.cos(toRad(angle));
           return (
