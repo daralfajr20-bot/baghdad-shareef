@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sacred Directions</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0b3d2e">
+<meta name="theme-color" content="#08201a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sacred Directions">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-baghdad-192.png">
 <link rel="apple-touch-icon" href="icon-baghdad-192.png">
 <style>
@@ -20,14 +24,19 @@
   :root[data-theme="light"]{ --bg:#08201a; --panel:#0e2f24; --text:var(--cream); }
 
   *{box-sizing:border-box;}
-  html,body{ margin:0; height:100%; background:var(--bg); color:var(--text); }
-  html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+  /* solid colour on html so overscroll / bounce / notch areas are never white */
+  html{ margin:0; min-height:100%; background:#08201a; scroll-padding-top:env(safe-area-inset-top,0px);
+    -webkit-text-size-adjust:100%; overscroll-behavior:none; }
   body{
-    min-height:100%; display:flex; flex-direction:column; align-items:center;
+    margin:0; color:var(--text); background:transparent;
+    min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center;
     padding:calc(18px + env(safe-area-inset-top,0px)) 18px calc(22px + env(safe-area-inset-bottom,0px));
-    background: radial-gradient(circle at 50% -10%, var(--green-mid) 0%, transparent 55%), linear-gradient(180deg, var(--bg) 0%, #061914 100%);
-    overflow-x:hidden;
+    overflow-x:hidden; overscroll-behavior:none; -webkit-tap-highlight-color:transparent;
   }
+  body.reader-open{ overflow:hidden; }
+  /* fixed full-bleed backdrop: fills the whole screen including under the status bar / home indicator */
+  .bg{ position:fixed; top:0; left:0; right:0; bottom:0; z-index:0; pointer-events:none;
+    background: radial-gradient(circle at 50% -10%, var(--green-mid) 0%, transparent 55%), linear-gradient(180deg, #08201a 0%, #061914 100%); }
   .lattice{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.10;
     background-image: repeating-linear-gradient(45deg, var(--gold) 0 1px, transparent 1px 26px), repeating-linear-gradient(-45deg, var(--gold) 0 1px, transparent 1px 26px); }
 
@@ -46,10 +55,10 @@
   .ring{ position:absolute; inset:0; border-radius:50%;
     background:radial-gradient(circle at 50% 40%, var(--green-glow) 0%, var(--green-mid) 55%, var(--green-deep) 100%);
     box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 0 0 10px rgba(212,175,55,.08), inset 0 4px 24px rgba(0,0,0,.45); }
-  .ticks{ position:absolute; inset:0; transition:transform .12s linear; }
+  .ticks{ position:absolute; inset:0; }
   .ticks div{ position:absolute; left:50%; top:6px; width:2px; height:11px; background:rgba(233,207,122,.55); transform-origin:1px 144px; }
   .ticks div.major{ height:15px; width:3px; background:var(--gold-soft); }
-  .cardinal{ position:absolute; inset:0; font-size:.75rem; font-weight:700; color:var(--gold-soft); transition:transform .12s linear; }
+  .cardinal{ position:absolute; inset:0; font-size:.75rem; font-weight:700; color:var(--gold-soft); }
   .cardinal span{ position:absolute; transform:translate(-50%,-50%); }
   .cardinal span i{ display:inline-block; font-style:normal; }
   .n{ top:8%; left:50%; } .e{ top:50%; left:92%; } .s{ top:92%; left:50%; } .w{ top:50%; left:8%; }
@@ -57,10 +66,11 @@
   /* small transparent markers, no boxed backdrop, positioned by relative heading */
   .marker{
     position:absolute; width:30px; height:30px; transform:translate(-50%,-50%);
-    z-index:3; transition:left .12s linear, top .12s linear, filter .2s ease;
+    z-index:3; transition:filter .2s ease, opacity .3s ease;
     filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));
   }
   .marker img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .marker.pending{ opacity:.35; }
   .marker.active{ filter:drop-shadow(0 0 8px var(--gold-soft)) drop-shadow(0 0 3px #fff); }
 
   .pointer-wrap{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2; }
@@ -106,30 +116,34 @@
   .read-btn{ background:linear-gradient(180deg, var(--gold-soft), var(--gold)); color:var(--ink) !important; border:none; box-shadow:0 2px 0 #8a6b1e; }
   .dl-btn, .dl-btn:link, .dl-btn:visited, .dl-btn:hover, .dl-btn:active{ background:transparent; color:var(--gold-soft) !important; border:1px solid rgba(212,175,55,.5); }
 
-  /* pdf reader - full screen overlay, independent of the app's normal max-width column */
+  /* pdf reader - true full screen, same green/gold look as the rest of the app */
   .reader-fullscreen{
-    position:fixed; inset:0; z-index:50;
-    background: radial-gradient(circle at 50% -10%, var(--green-mid) 0%, transparent 55%), linear-gradient(180deg, var(--bg) 0%, #061914 100%);
+    position:fixed; top:0; left:0; right:0; bottom:0; z-index:50;
+    background: radial-gradient(circle at 50% -10%, var(--green-mid) 0%, transparent 55%), linear-gradient(180deg, #08201a 0%, #061914 100%);
     display:flex; flex-direction:column; align-items:center;
-    padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(14px + env(safe-area-inset-bottom,0px));
-    overflow-y:auto;
+    padding:calc(10px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px));
+    overflow:hidden;
   }
-  .reader{ width:100%; max-width:480px; display:flex; flex-direction:column; align-items:center; flex:1; }
-  .reader-top{ display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:10px; gap:8px; position:sticky; top:0; z-index:2;
-    background:linear-gradient(180deg, var(--bg) 70%, transparent); padding-bottom:6px; }
+  .reader{ width:100%; max-width:760px; display:flex; flex-direction:column; align-items:center; flex:1; min-height:0; position:relative; z-index:1; }
+  .reader-top{ display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:8px; gap:8px; flex:none; }
   .reader-top .back-btn{ background:transparent; border:1px solid rgba(212,175,55,.5); color:var(--gold-soft); border-radius:10px; padding:8px 12px; font-size:.82rem; box-shadow:none; flex:none; }
   .reader-top h3{ margin:0; color:var(--gold-soft); font-size:.92rem; text-align:center; flex:1; }
   .reader-top .dl-btn{ flex:none; padding:8px 12px; font-size:.8rem; }
-  .reader-canvas-wrap{ width:100%; background:#fff; border-radius:10px; overflow:auto; border:2px solid var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.4); display:flex; justify-content:center; min-height:200px; align-items:flex-start; flex:1; }
-  .reader-canvas-wrap canvas{ max-width:100%; height:auto; display:block; }
-  .reader-nav{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; margin-top:12px; position:sticky; bottom:0; }
-  .reader-nav button{ padding:10px 18px; font-size:.9rem; }
+  /* the stage is the app background itself (no white); the page is centred inside it */
+  .reader-stage{ flex:1; min-height:0; width:100%; display:flex; padding:6px; overflow:auto; -webkit-overflow-scrolling:touch;
+    background:transparent; border-radius:14px; border:1px solid rgba(212,175,55,.25); background:rgba(14,47,36,.55); }
+  .reader-stage canvas{ display:block; margin:auto; flex:none; border-radius:4px;
+    box-shadow:0 0 0 2px var(--gold), 0 0 0 7px rgba(212,175,55,.10), 0 10px 26px rgba(0,0,0,.5); }
+  .reader-nav{ display:flex; align-items:center; justify-content:center; gap:10px; width:100%; margin-top:10px; flex:none; }
+  .reader-nav button{ padding:10px 14px; font-size:.88rem; }
+  .reader-nav button.secondary{ padding:10px 12px; }
   .reader-nav button:disabled{ opacity:.4; cursor:default; }
-  .reader-page-ind{ color:var(--cream); font-size:.85rem; min-width:72px; text-align:center; }
-  .reader-loading{ color:var(--cream); font-size:.85rem; padding:30px 0; }
+  .reader-page-ind{ color:var(--cream); font-size:.85rem; min-width:84px; text-align:center; }
+  .reader-loading{ color:var(--cream); font-size:.85rem; margin:auto; padding:30px 0; text-align:center; }
 </style>
 </head>
 <body>
+<div class="bg"></div>
 <div class="lattice"></div>
 <div id="root"></div>
 
@@ -189,7 +203,7 @@ function assignRings(items){
 
 function Compass(){
   const [destinations, setDestinations] = useState(DESTINATIONS_BASE.map(d => ({...d, bearing:null, distance:null})));
-  const [compassHeading, setCompassHeading] = useState(0);
+  const [compassHeading, setCompassHeading] = useState(0);   // unwrapped + smoothed, used for the dial
   const [orientationActive, setOrientationActive] = useState(false);
   const [bearingsReady, setBearingsReady] = useState(false);
   const [statusMsg, setStatusMsg] = useState('Tap Start and allow location + compass access, then turn slowly.');
@@ -199,26 +213,56 @@ function Compass(){
   const [debugHeading, setDebugHeading] = useState(null);
   const [startLabel, setStartLabel] = useState('Start — Find Directions');
   const warnedRelative = useRef(false);
+  const headingRef = useRef(null);
+  const rafRef = useRef(0);
+  const watchRef = useRef(null);
+  const listening = useRef(false);
 
   const ticksRef = useRef(null);
 
+  // always-normalised 0..360 heading for all comparisons / marker maths
+  const hNorm = ((compassHeading % 360) + 360) % 360;
+
   const handleOrientation = useCallback((event) => {
-    let heading;
-    if (typeof event.webkitCompassHeading === 'number') {
-      heading = event.webkitCompassHeading; // iOS Safari: true compass heading
-    } else if (event.absolute === true && event.alpha !== null) {
-      heading = (360 - event.alpha) % 360; // Android absolute orientation
-    } else {
+    let raw = null;
+    if (typeof event.webkitCompassHeading === 'number' && !isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
+      raw = event.webkitCompassHeading;               // iOS: true compass heading
+    } else if ((event.absolute === true || event.type === 'deviceorientationabsolute') && event.alpha != null) {
+      raw = (360 - event.alpha) % 360;                // Android absolute orientation
+    }
+    if (raw === null) {
+      // iOS reports -1 while uncalibrated; Android 'deviceorientation' without absolute is relative. Keep waiting.
       if (!warnedRelative.current) {
         warnedRelative.current = true;
-        setStatusMsg('Compass permission denied. Cannot detect facing direction.');
+        setStatusMsg('Waiting for compass signal… move your phone in a slow figure-8 and keep it flat.');
       }
       return;
     }
-    setCompassHeading(heading);
-    setOrientationActive(true);
-    setDebugHeading(heading);
+    // low-pass filter in unwrapped space: smooth, and never spins the long way round at 359° -> 0°
+    if (headingRef.current === null) {
+      headingRef.current = raw;
+    } else {
+      const cur = headingRef.current;
+      const delta = (((raw - (cur % 360)) + 540) % 360) - 180;
+      headingRef.current = cur + delta * 0.3;
+    }
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = 0;
+        setCompassHeading(headingRef.current);
+        setDebugHeading(((headingRef.current % 360) + 360) % 360);
+        setOrientationActive(true);
+      });
+    }
   }, []);
+
+  const attachCompass = useCallback(() => {
+    window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.removeEventListener('deviceorientation', handleOrientation, true);
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    listening.current = true;
+  }, [handleOrientation]);
 
   const enableCompass = useCallback(async () => {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -233,24 +277,52 @@ function Compass(){
         return;
       }
     }
-    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-    window.addEventListener('deviceorientation', handleOrientation, true);
+    attachCompass();
     setCalibrateVisible(true);
-  }, [handleOrientation]);
+  }, [attachCompass]);
+
+  // iOS stops delivering sensor events when the PWA is backgrounded - re-attach on return
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'visible' && listening.current) attachCompass(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [attachCompass]);
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) { setStatusMsg('This browser has no location support.'); return; }
     setStatusMsg('Locating you...');
-    navigator.geolocation.watchPosition(pos => {
+    if (watchRef.current !== null) { navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
+
+    const onPos = (pos) => {
       const { latitude, longitude } = pos.coords;
       setDestinations(prev => prev.map(dest => {
         const { bearing, distance } = computeBearingDistance(latitude, longitude, dest.lat, dest.lon);
         return { ...dest, bearing, distance };
       }));
       setBearingsReady(true);
-    }, err => {
-      setStatusMsg('Location error: ' + err.message + '. Please allow location access and try again.');
-    }, { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
+    };
+
+    const startWatch = (high) => {
+      watchRef.current = navigator.geolocation.watchPosition(onPos, (err) => {
+        if (err.code === 1) {
+          setStatusMsg('Location permission denied. Please allow location access (Settings › Privacy › Location Services) and tap Refresh.');
+          return;
+        }
+        // Timeout / unavailable is common on iPhones using Approximate Location:
+        // drop to a low-accuracy watch instead of giving up (this is what left the pointers frozen).
+        if (high) {
+          if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+          startWatch(false);
+        } else {
+          setStatusMsg('Could not get your location (' + err.message + '). Check Location Services, then tap Refresh.');
+        }
+      }, { enableHighAccuracy: high, maximumAge: high ? 5000 : 120000, timeout: high ? 10000 : 30000 });
+    };
+
+    // 1) a quick coarse fix so the icons appear immediately (works with Approximate Location)
+    navigator.geolocation.getCurrentPosition(onPos, () => {}, { enableHighAccuracy: false, maximumAge: 600000, timeout: 10000 });
+    // 2) then refine with a live watch
+    startWatch(true);
   }, []);
 
   const handleStart = () => {
@@ -271,7 +343,7 @@ function Compass(){
     let matched = null;
     let nearest = null; let nearestDiff = 999;
     destinations.forEach(dest => {
-      const diff = angDiff(compassHeading, dest.bearing);
+      const diff = angDiff(hNorm, dest.bearing);
       if (diff <= ALIGN_THRESHOLD) matched = dest;
       if (diff < nearestDiff) { nearestDiff = diff; nearest = dest; }
     });
@@ -282,13 +354,13 @@ function Compass(){
     if (matched) {
       setStatusMsg(`Now you're pointing at ${matched.label}`);
     } else if (orientationActive && nearest) {
-      let rel = ((nearest.bearing - compassHeading + 540) % 360) - 180;
+      let rel = ((nearest.bearing - hNorm + 540) % 360) - 180;
       const dir = rel < 0 ? 'left' : 'right';
       setStatusMsg(`Turn ${dir} about ${Math.round(Math.abs(rel))}° to face ${nearest.label}`);
     } else if (!orientationActive) {
       setStatusMsg('Compass not active — showing directions as if facing North. Grant motion access for live pointing.');
     }
-  }, [compassHeading, bearingsReady, destinations, orientationActive]);
+  }, [hNorm, bearingsReady, destinations, orientationActive]);
 
   // build tick marks once
   useEffect(() => {
@@ -328,14 +400,14 @@ function Compass(){
         </div>
 
         {destinations.map(dest => {
-          const angle = bearingsReady ? (dest.bearing - compassHeading + 360) % 360 : 0;
+          const angle = bearingsReady ? (dest.bearing - hNorm + 360) % 360 : 0;
           const radiusPct = RING_RADII[ringById[dest.id] || 0];
           const x = 50 + radiusPct * Math.sin(toRad(angle));
           const y = 50 - radiusPct * Math.cos(toRad(angle));
           return (
             <div
               key={dest.id}
-              className={"marker" + (matchedId === dest.id ? " active" : "")}
+              className={"marker" + (matchedId === dest.id ? " active" : "") + (bearingsReady ? "" : " pending")}
               style={{ left: x + '%', top: y + '%' }}
             >
               <img src={dest.icon} alt={dest.label} />
@@ -388,8 +460,17 @@ function PdfReader({ doc, onBack }){
   const [numPages, setNumPages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [fitMode, setFitMode] = useState('page');       // 'page' = whole page centred, 'width' = fill width and scroll
+  const [box, setBox] = useState({ w: 0, h: 0 });
   const canvasRef = useRef(null);
-  const wrapRef = useRef(null);
+  const stageRef = useRef(null);
+  const taskRef = useRef(null);
+
+  // lock the app behind the reader so nothing scrolls / shows through
+  useEffect(() => {
+    document.body.classList.add('reader-open');
+    return () => document.body.classList.remove('reader-open');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -409,23 +490,42 @@ function PdfReader({ doc, onBack }){
     return () => { cancelled = true; };
   }, [doc]);
 
+  // measure the available stage (re-measures on rotation / resize / iOS toolbar changes)
   useEffect(() => {
-    if (!pdf || !canvasRef.current) return;
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    let ro = null;
+    if (window.ResizeObserver) { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pdf || !canvasRef.current || !box.w || !box.h) return;
     let cancelled = false;
     pdf.getPage(pageNum).then(page => {
       if (cancelled) return;
       const canvas = canvasRef.current;
+      if (!canvas) return;
       const context = canvas.getContext('2d');
-      const viewportBase = page.getViewport({ scale: 1 });
-      const containerWidth = (wrapRef.current && wrapRef.current.clientWidth) || 340;
+      const base = page.getViewport({ scale: 1 });
 
-      // CSS size: how big the page appears on screen (unchanged by screen density)
-      const cssScale = containerWidth / viewportBase.width;
+      // stage has 6px padding each side + room for the gold frame
+      const availW = Math.max(100, box.w - 12 - 14);
+      const availH = Math.max(100, box.h - 12 - 14);
+      const cssScale = fitMode === 'page'
+        ? Math.min(availW / base.width, availH / base.height)
+        : availW / base.width;
       const cssViewport = page.getViewport({ scale: cssScale });
 
-      // Actual pixel buffer: multiplied by the device's real pixel density (Retina/high-DPI
-      // phone screens are commonly 2x-3.5x), so text and fine borders render sharp instead
-      // of blurry. Capped so very dense screens don't produce an oversized canvas.
+      // render at the device's real pixel density so text stays sharp on Retina screens
       const outputScale = Math.min(window.devicePixelRatio || 1, 3);
       const renderViewport = page.getViewport({ scale: cssScale * outputScale });
 
@@ -434,10 +534,19 @@ function PdfReader({ doc, onBack }){
       canvas.style.width = Math.floor(cssViewport.width) + 'px';
       canvas.style.height = Math.floor(cssViewport.height) + 'px';
 
-      page.render({ canvasContext: context, viewport: renderViewport });
+      if (taskRef.current) { try { taskRef.current.cancel(); } catch (e) {} }
+      const task = page.render({ canvasContext: context, viewport: renderViewport });
+      taskRef.current = task;
+      task.promise.catch(() => {});
     });
-    return () => { cancelled = true; };
-  }, [pdf, pageNum]);
+    return () => {
+      cancelled = true;
+      if (taskRef.current) { try { taskRef.current.cancel(); } catch (e) {} }
+    };
+  }, [pdf, pageNum, box.w, box.h, fitMode]);
+
+  // bring the new page back to the top when turning pages in "fit width" mode
+  useEffect(() => { if (stageRef.current) stageRef.current.scrollTop = 0; }, [pageNum, fitMode]);
 
   return (
     <div className="reader-fullscreen">
@@ -447,7 +556,7 @@ function PdfReader({ doc, onBack }){
           <h3>{doc.title}</h3>
           <a className="dl-btn" href={doc.file} download>Download</a>
         </div>
-        <div className="reader-canvas-wrap" ref={wrapRef}>
+        <div className="reader-stage" ref={stageRef}>
           {loading && <div className="reader-loading">Loading…</div>}
           {error && <div className="reader-loading">{error}</div>}
           {!loading && !error && <canvas ref={canvasRef}></canvas>}
@@ -456,6 +565,7 @@ function PdfReader({ doc, onBack }){
           <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1}>&lsaquo; Prev</button>
           <span className="reader-page-ind">{numPages ? `Page ${pageNum} / ${numPages}` : '—'}</span>
           <button onClick={() => setPageNum(p => Math.min(numPages || p, p + 1))} disabled={!numPages || pageNum >= numPages}>Next &rsaquo;</button>
+          <button className="secondary" onClick={() => setFitMode(m => m === 'page' ? 'width' : 'page')}>{fitMode === 'page' ? 'Zoom' : 'Fit'}</button>
         </div>
       </div>
     </div>
