@@ -101,19 +101,28 @@
   .lib-card h3{ margin:0; color:var(--gold-soft); font-size:1.02rem; }
   .lib-card p{ margin:2px 0 8px; font-size:.78rem; color:rgba(243,234,215,.75); line-height:1.4; }
   .lib-actions{ display:flex; gap:8px; }
-  .lib-actions button, .lib-actions a{ flex:1; text-align:center; font-family:inherit; font-size:.82rem; font-weight:700;
-    border-radius:10px; padding:9px 10px; text-decoration:none; cursor:pointer; }
-  .lib-actions .read-btn{ background:linear-gradient(180deg, var(--gold-soft), var(--gold)); color:var(--ink); border:none; box-shadow:0 2px 0 #8a6b1e; }
-  .lib-actions .dl-btn{ background:transparent; color:var(--gold-soft); border:1px solid rgba(212,175,55,.5); }
+  .read-btn, .dl-btn{ flex:1; text-align:center; font-family:inherit; font-size:.82rem; font-weight:700;
+    border-radius:10px; padding:9px 10px; text-decoration:none; cursor:pointer; display:inline-block; }
+  .read-btn{ background:linear-gradient(180deg, var(--gold-soft), var(--gold)); color:var(--ink) !important; border:none; box-shadow:0 2px 0 #8a6b1e; }
+  .dl-btn, .dl-btn:link, .dl-btn:visited, .dl-btn:hover, .dl-btn:active{ background:transparent; color:var(--gold-soft) !important; border:1px solid rgba(212,175,55,.5); }
 
-  /* pdf reader */
-  .reader{ width:100%; display:flex; flex-direction:column; align-items:center; }
-  .reader-top{ display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:10px; gap:8px; }
-  .reader-top .back-btn{ background:transparent; border:1px solid rgba(212,175,55,.5); color:var(--gold-soft); border-radius:10px; padding:8px 12px; font-size:.82rem; box-shadow:none; }
+  /* pdf reader - full screen overlay, independent of the app's normal max-width column */
+  .reader-fullscreen{
+    position:fixed; inset:0; z-index:50;
+    background: radial-gradient(circle at 50% -10%, var(--green-mid) 0%, transparent 55%), linear-gradient(180deg, var(--bg) 0%, #061914 100%);
+    display:flex; flex-direction:column; align-items:center;
+    padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(14px + env(safe-area-inset-bottom,0px));
+    overflow-y:auto;
+  }
+  .reader{ width:100%; max-width:480px; display:flex; flex-direction:column; align-items:center; flex:1; }
+  .reader-top{ display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:10px; gap:8px; position:sticky; top:0; z-index:2;
+    background:linear-gradient(180deg, var(--bg) 70%, transparent); padding-bottom:6px; }
+  .reader-top .back-btn{ background:transparent; border:1px solid rgba(212,175,55,.5); color:var(--gold-soft); border-radius:10px; padding:8px 12px; font-size:.82rem; box-shadow:none; flex:none; }
   .reader-top h3{ margin:0; color:var(--gold-soft); font-size:.92rem; text-align:center; flex:1; }
-  .reader-canvas-wrap{ width:100%; background:#fff; border-radius:10px; overflow:hidden; border:2px solid var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.4); display:flex; justify-content:center; min-height:200px; align-items:center; }
+  .reader-top .dl-btn{ flex:none; padding:8px 12px; font-size:.8rem; }
+  .reader-canvas-wrap{ width:100%; background:#fff; border-radius:10px; overflow:auto; border:2px solid var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.4); display:flex; justify-content:center; min-height:200px; align-items:flex-start; flex:1; }
   .reader-canvas-wrap canvas{ max-width:100%; height:auto; display:block; }
-  .reader-nav{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; margin-top:12px; }
+  .reader-nav{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; margin-top:12px; position:sticky; bottom:0; }
   .reader-nav button{ padding:10px 18px; font-size:.9rem; }
   .reader-nav button:disabled{ opacity:.4; cursor:default; }
   .reader-page-ind{ color:var(--cream); font-size:.85rem; min-width:72px; text-align:center; }
@@ -431,21 +440,23 @@ function PdfReader({ doc, onBack }){
   }, [pdf, pageNum]);
 
   return (
-    <div className="reader">
-      <div className="reader-top">
-        <button className="back-btn" onClick={onBack}>&larr; Back</button>
-        <h3>{doc.title}</h3>
-        <a className="dl-btn" href={doc.file} download style={{padding:'8px 12px', fontSize:'.8rem'}}>Download</a>
-      </div>
-      <div className="reader-canvas-wrap" ref={wrapRef}>
-        {loading && <div className="reader-loading">Loading…</div>}
-        {error && <div className="reader-loading">{error}</div>}
-        {!loading && !error && <canvas ref={canvasRef}></canvas>}
-      </div>
-      <div className="reader-nav">
-        <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1}>&lsaquo; Prev</button>
-        <span className="reader-page-ind">{numPages ? `Page ${pageNum} / ${numPages}` : '—'}</span>
-        <button onClick={() => setPageNum(p => Math.min(numPages || p, p + 1))} disabled={!numPages || pageNum >= numPages}>Next &rsaquo;</button>
+    <div className="reader-fullscreen">
+      <div className="reader">
+        <div className="reader-top">
+          <button className="back-btn" onClick={onBack}>&larr; Back</button>
+          <h3>{doc.title}</h3>
+          <a className="dl-btn" href={doc.file} download>Download</a>
+        </div>
+        <div className="reader-canvas-wrap" ref={wrapRef}>
+          {loading && <div className="reader-loading">Loading…</div>}
+          {error && <div className="reader-loading">{error}</div>}
+          {!loading && !error && <canvas ref={canvasRef}></canvas>}
+        </div>
+        <div className="reader-nav">
+          <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1}>&lsaquo; Prev</button>
+          <span className="reader-page-ind">{numPages ? `Page ${pageNum} / ${numPages}` : '—'}</span>
+          <button onClick={() => setPageNum(p => Math.min(numPages || p, p + 1))} disabled={!numPages || pageNum >= numPages}>Next &rsaquo;</button>
+        </div>
       </div>
     </div>
   );
