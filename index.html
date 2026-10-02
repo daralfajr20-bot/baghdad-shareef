@@ -87,6 +87,37 @@
   button:focus-visible{ outline:3px solid var(--gold-soft); outline-offset:2px; }
 
   .note{ font-size:.7rem; color:rgba(243,234,215,.5); text-align:center; margin-top:14px; line-height:1.5; }
+
+  /* top-level section tabs */
+  .tabbar{ display:flex; gap:8px; width:100%; margin-bottom:4px; }
+  .tabbar button{ flex:1; padding:10px 8px; font-size:.85rem; border-radius:12px;
+    background:var(--panel); color:var(--cream); border:1px solid rgba(212,175,55,.3);
+    box-shadow:none; }
+  .tabbar button.active{ background:linear-gradient(180deg, var(--gold-soft), var(--gold)); color:var(--ink); border-color:var(--gold); }
+
+  /* library list */
+  .lib-card{ width:100%; background:var(--panel); border:1px solid rgba(212,175,55,.3); border-radius:16px;
+    padding:14px; margin-top:12px; display:flex; flex-direction:column; gap:4px; }
+  .lib-card h3{ margin:0; color:var(--gold-soft); font-size:1.02rem; }
+  .lib-card p{ margin:2px 0 8px; font-size:.78rem; color:rgba(243,234,215,.75); line-height:1.4; }
+  .lib-actions{ display:flex; gap:8px; }
+  .lib-actions button, .lib-actions a{ flex:1; text-align:center; font-family:inherit; font-size:.82rem; font-weight:700;
+    border-radius:10px; padding:9px 10px; text-decoration:none; cursor:pointer; }
+  .lib-actions .read-btn{ background:linear-gradient(180deg, var(--gold-soft), var(--gold)); color:var(--ink); border:none; box-shadow:0 2px 0 #8a6b1e; }
+  .lib-actions .dl-btn{ background:transparent; color:var(--gold-soft); border:1px solid rgba(212,175,55,.5); }
+
+  /* pdf reader */
+  .reader{ width:100%; display:flex; flex-direction:column; align-items:center; }
+  .reader-top{ display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:10px; gap:8px; }
+  .reader-top .back-btn{ background:transparent; border:1px solid rgba(212,175,55,.5); color:var(--gold-soft); border-radius:10px; padding:8px 12px; font-size:.82rem; box-shadow:none; }
+  .reader-top h3{ margin:0; color:var(--gold-soft); font-size:.92rem; text-align:center; flex:1; }
+  .reader-canvas-wrap{ width:100%; background:#fff; border-radius:10px; overflow:hidden; border:2px solid var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.4); display:flex; justify-content:center; min-height:200px; align-items:center; }
+  .reader-canvas-wrap canvas{ max-width:100%; height:auto; display:block; }
+  .reader-nav{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; margin-top:12px; }
+  .reader-nav button{ padding:10px 18px; font-size:.9rem; }
+  .reader-nav button:disabled{ opacity:.4; cursor:default; }
+  .reader-page-ind{ color:var(--cream); font-size:.85rem; min-width:72px; text-align:center; }
+  .reader-loading{ color:var(--cream); font-size:.85rem; padding:30px 0; }
 </style>
 </head>
 <body>
@@ -96,6 +127,10 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js" crossorigin></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+</script>
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback } = React;
@@ -266,12 +301,7 @@ function Compass(){
   const ringById = bearingsReady ? assignRings(destinations) : {};
 
   return (
-    <div className="wrap">
-      <header>
-        <h1>Sacred Directions</h1>
-        <div className="sub">Baghdad Shareef · Kaabah · Madina Shareef</div>
-      </header>
-
+    <>
       <div className={"status" + (aligned ? " aligned" : "")} dangerouslySetInnerHTML={{__html: statusMsg.replace(
         new RegExp('(' + destinations.map(d=>d.label).join('|') + ')'), '<b>$1</b>'
       )}} />
@@ -332,11 +362,122 @@ function Compass(){
       <div className="note" style={{opacity:.8}}>
         Device heading: {debugHeading == null ? '—' : Math.round(debugHeading) + '° (compare with your phone\'s built-in compass to verify)'}
       </div>
+    </>
+  );
+}
+
+const LIBRARY_DOCS = [
+  { id:'khatam', title:'Khatam-e-Qadria Kabeer', file:'khatam-e-qadria.pdf',
+    description:'A collection of durood, surahs and dua read together for cure from ailments, relief from hardship, and the removal of calamity, through the tawassul of Ghaus-e-Azam Shaikh Abdul Qadir al-Jeelani (RA).' },
+  { id:'qaseeda', title:'Qaseeda-e-Ghousia', file:'qaseeda-e-ghousia.pdf',
+    description:'The widely-recited qaseeda (ode) of Shaikh Abdul Qadir al-Jeelani (RA), read by his devotees seeking blessings and intercession.' }
+];
+
+function PdfReader({ doc, onBack }){
+  const [pdf, setPdf] = useState(null);
+  const [pageNum, setPageNum] = useState(1);
+  const [numPages, setNumPages] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    pdfjsLib.getDocument(doc.file).promise.then(loadedPdf => {
+      if (cancelled) return;
+      setPdf(loadedPdf);
+      setNumPages(loadedPdf.numPages);
+      setPageNum(1);
+      setLoading(false);
+    }).catch(err => {
+      if (cancelled) return;
+      setError('Could not load this document. ' + err.message);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [doc]);
+
+  useEffect(() => {
+    if (!pdf || !canvasRef.current) return;
+    let cancelled = false;
+    pdf.getPage(pageNum).then(page => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      const viewportBase = page.getViewport({ scale: 1 });
+      const containerWidth = (wrapRef.current && wrapRef.current.clientWidth) || 340;
+      const scale = Math.min(2.5, containerWidth / viewportBase.width);
+      const viewport = page.getViewport({ scale });
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      page.render({ canvasContext: context, viewport });
+    });
+    return () => { cancelled = true; };
+  }, [pdf, pageNum]);
+
+  return (
+    <div className="reader">
+      <div className="reader-top">
+        <button className="back-btn" onClick={onBack}>&larr; Back</button>
+        <h3>{doc.title}</h3>
+        <a className="dl-btn" href={doc.file} download style={{padding:'8px 12px', fontSize:'.8rem'}}>Download</a>
+      </div>
+      <div className="reader-canvas-wrap" ref={wrapRef}>
+        {loading && <div className="reader-loading">Loading…</div>}
+        {error && <div className="reader-loading">{error}</div>}
+        {!loading && !error && <canvas ref={canvasRef}></canvas>}
+      </div>
+      <div className="reader-nav">
+        <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1}>&lsaquo; Prev</button>
+        <span className="reader-page-ind">{numPages ? `Page ${pageNum} / ${numPages}` : '—'}</span>
+        <button onClick={() => setPageNum(p => Math.min(numPages || p, p + 1))} disabled={!numPages || pageNum >= numPages}>Next &rsaquo;</button>
+      </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<Compass />);
+function Library(){
+  const [selected, setSelected] = useState(null);
+  if (selected) return <PdfReader doc={selected} onBack={() => setSelected(null)} />;
+  return (
+    <>
+      {LIBRARY_DOCS.map(doc => (
+        <div className="lib-card" key={doc.id}>
+          <h3>{doc.title}</h3>
+          <p>{doc.description}</p>
+          <div className="lib-actions">
+            <button className="read-btn" onClick={() => setSelected(doc)}>Read</button>
+            <a className="dl-btn" href={doc.file} download>Download</a>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function App(){
+  const [tab, setTab] = useState('compass');
+  return (
+    <div className="wrap">
+      <header>
+        <h1>Sacred Directions</h1>
+        <div className="sub">Baghdad Shareef · Kaabah · Madina Shareef</div>
+      </header>
+
+      <div className="tabbar">
+        <button className={tab === 'compass' ? 'active' : ''} onClick={() => setTab('compass')}>Compass</button>
+        <button className={tab === 'library' ? 'active' : ''} onClick={() => setTab('library')}>Wazaif &amp; Prayers</button>
+      </div>
+
+      {tab === 'compass' ? <Compass /> : <Library />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
