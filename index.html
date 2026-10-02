@@ -367,9 +367,9 @@ function Compass(){
 }
 
 const LIBRARY_DOCS = [
-  { id:'khatam', title:'Khatam-e-Qadria Kabeer', file:'khatam-e-qadria.pdf',
+  { id:'khatam', title:'Khatam E Qadriya', file:'khatam-e-qadria.pdf',
     description:'A collection of durood, surahs and dua read together for cure from ailments, relief from hardship, and the removal of calamity, through the tawassul of Ghaus-e-Azam Shaikh Abdul Qadir al-Jeelani (RA).' },
-  { id:'qaseeda', title:'Qaseeda-e-Ghousia', file:'qaseeda-e-ghousia.pdf',
+  { id:'qaseeda', title:'Qaseeda E Ghousia', file:'qaseeda-e-ghousia.pdf',
     description:'The widely-recited qaseeda (ode) of Shaikh Abdul Qadir al-Jeelani (RA), read by his devotees seeking blessings and intercession.' }
 ];
 
@@ -409,11 +409,23 @@ function PdfReader({ doc, onBack }){
       const context = canvas.getContext('2d');
       const viewportBase = page.getViewport({ scale: 1 });
       const containerWidth = (wrapRef.current && wrapRef.current.clientWidth) || 340;
-      const scale = Math.min(2.5, containerWidth / viewportBase.width);
-      const viewport = page.getViewport({ scale });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      page.render({ canvasContext: context, viewport });
+
+      // CSS size: how big the page appears on screen (unchanged by screen density)
+      const cssScale = containerWidth / viewportBase.width;
+      const cssViewport = page.getViewport({ scale: cssScale });
+
+      // Actual pixel buffer: multiplied by the device's real pixel density (Retina/high-DPI
+      // phone screens are commonly 2x-3.5x), so text and fine borders render sharp instead
+      // of blurry. Capped so very dense screens don't produce an oversized canvas.
+      const outputScale = Math.min(window.devicePixelRatio || 1, 3);
+      const renderViewport = page.getViewport({ scale: cssScale * outputScale });
+
+      canvas.width = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
+      canvas.style.width = Math.floor(cssViewport.width) + 'px';
+      canvas.style.height = Math.floor(cssViewport.height) + 'px';
+
+      page.render({ canvasContext: context, viewport: renderViewport });
     });
     return () => { cancelled = true; };
   }, [pdf, pageNum]);
