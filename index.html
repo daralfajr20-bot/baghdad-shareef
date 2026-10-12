@@ -114,19 +114,25 @@
     padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(14px + env(safe-area-inset-bottom,0px));
     overflow-y:auto;
   }
-  .reader{ width:100%; max-width:560px; display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; }
+  .reader{ width:100%; max-width:720px; display:flex; flex-direction:column; align-items:center; flex:1; }
   .reader-top{ display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:10px; gap:8px; position:sticky; top:0; z-index:2;
     background:linear-gradient(180deg, var(--bg) 70%, transparent); padding-bottom:6px; }
   .reader-top .back-btn{ background:transparent; border:1px solid rgba(212,175,55,.5); color:var(--gold-soft); border-radius:10px; padding:8px 12px; font-size:.82rem; box-shadow:none; flex:none; }
   .reader-top h3{ margin:0; color:var(--gold-soft); font-size:.92rem; text-align:center; flex:1; }
   .reader-top .dl-btn{ flex:none; padding:8px 12px; font-size:.8rem; }
-  .reader-canvas-wrap{ width:100%; background:rgba(14,47,36,.6); border-radius:14px; border:1px solid rgba(212,175,55,.45); box-shadow:0 6px 18px rgba(0,0,0,.4); display:flex; justify-content:center; align-items:center; padding:8px; flex:1; }
-  .reader-canvas-wrap img{ width:100%; height:auto; max-height:calc(100vh - 150px); object-fit:contain; display:block; margin:auto; }
+  .reader-canvas-wrap{ width:100%; background:rgba(14,47,36,.45); border-radius:12px; border:1px solid rgba(212,175,55,.35); overflow-x:auto; padding:4px; }
+  .reader-canvas-wrap img{ display:block; margin:0 auto; max-width:none; height:auto; }
   .reader-nav{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; margin-top:12px; position:sticky; bottom:0; }
   .reader-nav button{ padding:10px 18px; font-size:.9rem; }
   .reader-nav button:disabled{ opacity:.4; cursor:default; }
   .reader-page-ind{ color:var(--cream); font-size:.85rem; min-width:72px; text-align:center; }
   .reader-loading{ color:var(--cream); font-size:.85rem; padding:30px 0; }
+  .marker.selected{ filter:drop-shadow(0 0 7px var(--gold)) drop-shadow(0 0 2px var(--gold-soft)); }
+  .legend .item.selected{ border-color:var(--gold-soft); box-shadow:0 0 0 1px var(--gold-soft) inset; }
+  .reader-nav{ background:linear-gradient(0deg, var(--bg) 70%, transparent); padding:8px 0 4px; }
+  .zoom-fab{ position:fixed; right:14px; bottom:calc(96px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:10px; z-index:60; }
+  .zoom-fab button{ width:46px; height:46px; border-radius:50%; padding:0; font-size:1.6rem; line-height:1; display:flex; align-items:center; justify-content:center; }
+  .zoom-fab button:disabled{ opacity:.4; }
 </style>
 </head>
 <body>
@@ -200,8 +206,6 @@ function Compass(){
   const sensorRef = useRef(null);      // latest real compass heading
   const targetRef = useRef(0);         // heading we are easing toward
   const shownRef = useRef(0);          // heading currently drawn
-  const manualRef = useRef(null);      // destination chosen by tapping
-  const manualStartRef = useRef(null); // sensor heading when the tap happened
   const listening = useRef(false);
   const watching = useRef(false);
   const havePos = useRef(false);
@@ -233,13 +237,7 @@ function Compass(){
     sensorRef.current = heading;
     setOrientationActive(true);
     setDebugHeading(heading);
-    if (manualRef.current) {
-      if (manualStartRef.current == null) manualStartRef.current = heading;
-      else if (angDiff(heading, manualStartRef.current) > 12) {   // user turned: back to live
-        manualRef.current = null; setManualId(null);
-      }
-    }
-    if (!manualRef.current) targetRef.current = heading;
+    targetRef.current = heading;
   }, []);
 
   const enableCompass = useCallback(async () => {
@@ -290,15 +288,8 @@ function Compass(){
   }, [applyPosition]);
 
   const selectDest = (dest) => {
-    if (manualRef.current === dest.id) {               // tap again: back to live compass
-      manualRef.current = null; setManualId(null);
-      if (sensorRef.current != null) targetRef.current = sensorRef.current;
-      return;
-    }
     if (dest.bearing == null) { setStatusMsg('Tap Start first so the app can find your location.'); return; }
-    manualRef.current = dest.id; setManualId(dest.id);
-    manualStartRef.current = sensorRef.current;
-    targetRef.current = dest.bearing;                  // compass turns to that direction
+    setManualId(prev => prev === dest.id ? null : dest.id);   // choose / un-choose the place to find
   };
 
   const handleStart = () => {
@@ -320,21 +311,22 @@ function Compass(){
     let nearest = null; let nearestDiff = 999;
     destinations.forEach(dest => {
       const diff = angDiff(compassHeading, dest.bearing);
-      if (diff <= ALIGN_THRESHOLD) matched = dest;
+      if (orientationActive && diff <= ALIGN_THRESHOLD) matched = dest;
       if (diff < nearestDiff) { nearestDiff = diff; nearest = dest; }
     });
-
     setMatchedId(matched ? matched.id : null);
     setAligned(!!matched);
 
-    if (matched) {
+    const focus = manualId ? destinations.find(d => d.id === manualId) : nearest;
+    if (!orientationActive) {
+      setStatusMsg(focus && manualId
+        ? `Compass not active, so I can't tell which way you face. ${focus.label} is ${Math.round(focus.bearing)}° from North.`
+        : 'Compass not active. Grant motion access, then turn slowly.');
+    } else if (matched && (!manualId || matched.id === manualId)) {
       setStatusMsg(`Now you're pointing at ${matched.label}`);
-    } else if (orientationActive && nearest) {
-      let rel = ((nearest.bearing - compassHeading + 540) % 360) - 180;
-      const dir = rel < 0 ? 'left' : 'right';
-      setStatusMsg(`Turn ${dir} about ${Math.round(Math.abs(rel))}° to face ${nearest.label}`);
-    } else if (!orientationActive && !manualId) {
-      setStatusMsg('Compass not active — showing directions as if facing North. Grant motion access for live pointing.');
+    } else if (focus) {
+      const rel = ((focus.bearing - compassHeading + 540) % 360) - 180;
+      setStatusMsg(`Turn ${rel < 0 ? 'left' : 'right'} about ${Math.round(Math.abs(rel))}° to face ${focus.label}`);
     }
   }, [compassHeading, bearingsReady, destinations, orientationActive, manualId]);
 
@@ -383,7 +375,7 @@ function Compass(){
           return (
             <div
               key={dest.id}
-              className={"marker" + (matchedId === dest.id ? " active" : "")}
+              className={"marker" + (matchedId === dest.id ? " active" : "") + (manualId === dest.id ? " selected" : "")}
               style={{ left: x + '%', top: y + '%', cursor:'pointer' }} onClick={() => selectDest(dest)}
             >
               <img src={dest.icon} alt={dest.label} />
@@ -397,7 +389,7 @@ function Compass(){
 
       <div className="legend">
         {destinations.map(dest => (
-          <div key={dest.id} className={"item" + (matchedId === dest.id ? " active" : "")} style={{cursor:"pointer"}} onClick={() => selectDest(dest)}>
+          <div key={dest.id} className={"item" + (matchedId === dest.id ? " active" : "") + (manualId === dest.id ? " selected" : "")} style={{cursor:"pointer"}} onClick={() => selectDest(dest)}>
             <img src={dest.legendIcon} alt={dest.label} />
             <div className="name">{dest.label}</div>
             <div className="dist">
@@ -415,7 +407,7 @@ function Compass(){
         )}
       </div>
 
-      <div className="note">Hold your phone flat, turn slowly in a full circle. When the white arrow lines up with an icon, you're facing that sacred direction. Tap an icon or card to turn the compass to that place; turn your phone to go back to live.</div>
+      <div className="note">Hold your phone flat, turn slowly in a full circle. When the white arrow lines up with an icon, you're facing that sacred direction. Tap an icon or card to choose a place, then turn your phone as the message says. Tap it again to clear.</div>
       <div className="note" style={{opacity:.8}}>
         Device heading: {debugHeading == null ? '—' : Math.round(debugHeading) + '° (compare with your phone\'s built-in compass to verify)'}
       </div>
@@ -432,9 +424,11 @@ const LIBRARY_DOCS = [
 
 function PdfReader({ doc, onBack }){
   const [pageNum, setPageNum] = useState(1);
+  const [zoom, setZoom] = useState(1);
   const scroller = useRef(null);
   const total = doc.pages.length;
   const go = (n) => { setPageNum(n); if (scroller.current) scroller.current.scrollTop = 0; };
+  const zoomBy = (d) => setZoom(z => Math.min(3, Math.max(1, Math.round((z + d) * 100) / 100)));
   return (
     <div className="reader-fullscreen" ref={scroller}>
       <div className="reader">
@@ -444,13 +438,17 @@ function PdfReader({ doc, onBack }){
           <a className="dl-btn" href={doc.file} download>Download</a>
         </div>
         <div className="reader-canvas-wrap">
-          <img src={doc.pages[pageNum - 1]} alt={doc.title + ' page ' + pageNum} />
+          <img src={doc.pages[pageNum - 1]} alt={doc.title + ' page ' + pageNum} style={{ width: (zoom * 100) + '%' }} />
         </div>
         <div className="reader-nav">
           <button onClick={() => go(Math.max(1, pageNum - 1))} disabled={pageNum <= 1}>&lsaquo; Prev</button>
           <span className="reader-page-ind">Page {pageNum} / {total}</span>
           <button onClick={() => go(Math.min(total, pageNum + 1))} disabled={pageNum >= total}>Next &rsaquo;</button>
         </div>
+      </div>
+      <div className="zoom-fab">
+        <button onClick={() => zoomBy(0.5)} disabled={zoom >= 3} aria-label="Zoom in">+</button>
+        <button onClick={() => zoomBy(-0.5)} disabled={zoom <= 1} aria-label="Zoom out">&minus;</button>
       </div>
     </div>
   );
